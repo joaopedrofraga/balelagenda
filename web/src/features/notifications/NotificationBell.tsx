@@ -4,7 +4,8 @@ import { useNotifications, useNotificationsRealtime } from '../../lib/hooks'
 export function NotificationBell() {
   useNotificationsRealtime()
   const { data: notifications } = useNotifications()
-  const unread = notifications?.filter((n) => !n.read).length ?? 0
+  const list = Array.isArray(notifications) ? notifications : []
+  const unread = list.filter((n) => !n.read).length
 
   return (
     <Link

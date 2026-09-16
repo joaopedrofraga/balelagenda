@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState } from 'react'
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from '../../features/auth/AuthProvider'
 import { NotificationBell } from '../../features/notifications/NotificationBell'
+import { RouteErrorBoundary } from '../RouteErrorBoundary'
 import { UserAvatar } from '../UserAvatar'
 
 const primaryLinkClass = ({ isActive }: { isActive: boolean }) =>
@@ -210,7 +211,9 @@ export function AppLayout() {
       </nav>
 
       <main className="rise-in relative z-0 flex-1">
-        <Outlet />
+        <RouteErrorBoundary>
+          <Outlet />
+        </RouteErrorBoundary>
       </main>
 
       <nav

@@ -46,4 +46,18 @@ export default defineConfig({
       },
     }),
   ],
+  build: {
+    // Evita mangling agressivo de identifiers que já colidiram com internals
+    // do React no bundle único (Rolldown) em builds anteriores.
+    rolldownOptions: {
+      output: {
+        minify: {
+          compress: true,
+          mangle: {
+            toplevel: false,
+          },
+        },
+      },
+    },
+  },
 })

@@ -661,12 +661,12 @@ export function useNotifications() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('notifications')
-        .select('*')
+        .select('id, user_id, type, title, message, read, event_id, created_at')
         .eq('user_id', profile!.id)
         .order('created_at', { ascending: false })
         .limit(50)
       if (error) throw error
-      return data as AppNotification[]
+      return (Array.isArray(data) ? data : []) as AppNotification[]
     },
   })
 }
