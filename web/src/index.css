@@ -54,5 +54,10 @@ body {
 }
 
 .rise-in {
-  animation: rise-in 0.45s ease-out both;
+  animation: rise-in 0.45s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.calendar-shell button:focus-visible {
+  outline: 2px solid var(--color-citrus);
+  outline-offset: 2px;
 }

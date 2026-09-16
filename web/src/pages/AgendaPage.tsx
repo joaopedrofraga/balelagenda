@@ -1,6 +1,7 @@
-import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
 import { useCreateEvent, useDefaultGroupId, useEvents, useUpdateEvent } from '../lib/hooks'
+import { dateKeyToLocalInput } from '../lib/dateUtils'
 import {
   Button,
   EmptyState,
@@ -21,6 +22,7 @@ function formatWhen(iso: string) {
 }
 
 export function AgendaPage() {
+  const [searchParams, setSearchParams] = useSearchParams()
   const { data: groupId } = useDefaultGroupId()
   const { data: events, isLoading } = useEvents(groupId)
   const createEvent = useCreateEvent()
@@ -35,6 +37,16 @@ export function AgendaPage() {
     category: '',
     notes: '',
   })
+
+  useEffect(() => {
+    const date = searchParams.get('date')
+    const wantNew = searchParams.get('new') === '1'
+    if (!date && !wantNew) return
+    const start = date && /^\d{4}-\d{2}-\d{2}$/.test(date) ? dateKeyToLocalInput(date) : ''
+    setOpen(true)
+    if (start) setForm((f) => ({ ...f, start_at: start }))
+    setSearchParams({}, { replace: true })
+  }, [searchParams, setSearchParams])
 
   async function onCreate(e: React.FormEvent) {
     e.preventDefault()
@@ -62,7 +74,9 @@ export function AgendaPage() {
   return (
     <div className="space-y-5">
       <div className="flex items-start justify-between gap-3">
-        <PageTitle subtitle="Calendário compartilhado do grupo.">Agenda</PageTitle>
+        <PageTitle subtitle="Lista de todos os rolês do grupo. O calendário fica no Início.">
+          Agenda
+        </PageTitle>
         <Button type="button" onClick={() => setOpen((v) => !v)}>
           {open ? 'Fechar' : 'Novo evento'}
         </Button>

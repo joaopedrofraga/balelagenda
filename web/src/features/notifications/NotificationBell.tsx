@@ -9,10 +9,24 @@ export function NotificationBell() {
   return (
     <Link
       to="/notificacoes"
-      className="relative rounded-lg border border-mist/20 px-3 py-2 text-sm text-mist hover:border-sky hover:text-sky"
-      aria-label={unread > 0 ? `${unread} notificações não lidas` : 'Notificações'}
+      className="relative flex h-10 w-10 items-center justify-center rounded-xl border border-mist/20 text-mist transition hover:border-sky hover:text-sky"
+      aria-label={unread > 0 ? `${unread} avisos não lidos` : 'Avisos'}
+      title="Avisos"
     >
-      Avisos
+      <svg
+        width="18"
+        height="18"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden
+      >
+        <path d="M6 9a6 6 0 1 1 12 0c0 7 3 7 3 9H3c0-2 3-2 3-9" />
+        <path d="M10 20a2 2 0 0 0 4 0" />
+      </svg>
       {unread > 0 && (
         <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-coral px-1 text-[10px] font-bold text-ink">
           {unread > 9 ? '9+' : unread}
