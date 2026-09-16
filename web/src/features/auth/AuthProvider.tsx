@@ -7,16 +7,23 @@ import {
   useState,
   type ReactNode,
 } from 'react'
-import type { Session } from '@supabase/supabase-js'
 import { supabase } from '../../lib/supabase'
 import type { Profile } from '../../types/database'
+import { logoutLocal } from './authService'
+import { getStoredSession, type StoredSession } from './sessionStorage'
+
+/** Colunas públicas de profiles — nunca incluir password_hash. */
+export const PROFILE_COLUMNS =
+  'id, name, username, email, role, active, avatar_path, created_at, updated_at, last_login_at'
 
 type AuthContextValue = {
-  session: Session | null
+  session: StoredSession | null
   profile: Profile | null
   loading: boolean
   isAdmin: boolean
   refreshProfile: () => Promise<void>
+  /** Após login bem-sucedido: recarrega sessão do storage + perfil. */
+  acceptSession: () => Promise<void>
   signOut: () => Promise<void>
 }
 
@@ -25,7 +32,7 @@ const AuthContext = createContext<AuthContextValue | null>(null)
 async function fetchProfile(userId: string): Promise<Profile | null> {
   const { data, error } = await supabase
     .from('profiles')
-    .select('*')
+    .select(PROFILE_COLUMNS)
     .eq('id', userId)
     .maybeSingle()
 
@@ -33,75 +40,68 @@ async function fetchProfile(userId: string): Promise<Profile | null> {
     console.error(error)
     return null
   }
-  return data
+  return data as Profile | null
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [session, setSession] = useState<Session | null>(null)
+  const [session, setSession] = useState<StoredSession | null>(null)
   const [profile, setProfile] = useState<Profile | null>(null)
   const [loading, setLoading] = useState(true)
 
-  const refreshProfile = useCallback(async () => {
-    const userId = (await supabase.auth.getUser()).data.user?.id
-    if (!userId) {
+  const hydrate = useCallback(async () => {
+    const stored = getStoredSession()
+    if (!stored) {
+      setSession(null)
       setProfile(null)
       return
     }
-    const p = await fetchProfile(userId)
-    setProfile(p)
-    if (p && !p.active) {
-      await supabase.auth.signOut()
+
+    setSession(stored)
+    const p = await fetchProfile(stored.userId)
+    if (!p || !p.active) {
+      await logoutLocal()
       setSession(null)
       setProfile(null)
+      return
     }
+    setProfile(p)
   }, [])
+
+  const refreshProfile = useCallback(async () => {
+    const stored = getStoredSession()
+    if (!stored) {
+      setProfile(null)
+      setSession(null)
+      return
+    }
+    const p = await fetchProfile(stored.userId)
+    if (!p || !p.active) {
+      await logoutLocal()
+      setSession(null)
+      setProfile(null)
+      return
+    }
+    setProfile(p)
+    setSession(stored)
+  }, [])
+
+  const acceptSession = useCallback(async () => {
+    await hydrate()
+  }, [hydrate])
 
   useEffect(() => {
     let mounted = true
-
-    supabase.auth.getSession().then(async ({ data }) => {
-      if (!mounted) return
-      setSession(data.session)
-      if (data.session?.user) {
-        const p = await fetchProfile(data.session.user.id)
-        if (!mounted) return
-        if (p && !p.active) {
-          await supabase.auth.signOut()
-          setSession(null)
-          setProfile(null)
-        } else {
-          setProfile(p)
-        }
-      }
-      setLoading(false)
-    })
-
-    const { data: sub } = supabase.auth.onAuthStateChange(async (_event, next) => {
-      setSession(next)
-      if (next?.user) {
-        const p = await fetchProfile(next.user.id)
-        if (p && !p.active) {
-          await supabase.auth.signOut()
-          setSession(null)
-          setProfile(null)
-        } else {
-          setProfile(p)
-          void supabase.rpc('touch_last_login')
-        }
-      } else {
-        setProfile(null)
-      }
-      setLoading(false)
-    })
-
+    ;(async () => {
+      await hydrate()
+      if (mounted) setLoading(false)
+    })()
     return () => {
       mounted = false
-      sub.subscription.unsubscribe()
     }
-  }, [])
+  }, [hydrate])
 
   const signOut = useCallback(async () => {
-    await supabase.auth.signOut()
+    await logoutLocal()
     setSession(null)
     setProfile(null)
   }, [])
@@ -113,9 +113,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       loading,
       isAdmin: profile?.role === 'admin' && !!profile.active,
       refreshProfile,
+      acceptSession,
       signOut,
     }),
-    [session, profile, loading, refreshProfile, signOut],
+    [session, profile, loading, refreshProfile, acceptSession, signOut],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

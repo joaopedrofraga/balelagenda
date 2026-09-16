@@ -17,10 +17,10 @@ export function RequireAuth() {
   if (!profile) {
     return (
       <div className="mx-auto flex min-h-dvh max-w-md flex-col justify-center px-4 text-center">
-        <h1 className="font-display text-3xl">Perfil incompleto</h1>
+        <h1 className="font-display text-3xl">Sessão inválida</h1>
         <p className="mt-2 text-mist/70">
-          Sua conta Auth existe, mas não há perfil ativo. Use um convite válido ou peça ao admin para
-          completar o bootstrap no Supabase.
+          Não foi possível carregar seu perfil. Faça login novamente ou peça ao admin para
+          reativar sua conta.
         </p>
       </div>
     )

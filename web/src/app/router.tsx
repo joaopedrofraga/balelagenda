@@ -2,7 +2,6 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { AuthProvider } from '../features/auth/AuthProvider'
 import { LoginPage } from '../features/auth/LoginPage'
-import { SignupPage } from '../features/auth/SignupPage'
 import { AppLayout } from '../components/layout/AppLayout'
 import { RequireAuth } from './RequireAuth'
 import { HomePage } from '../pages/HomePage'
@@ -31,7 +30,6 @@ export function AppRouter() {
         <BrowserRouter>
           <Routes>
             <Route path="/login" element={<LoginPage />} />
-            <Route path="/signup" element={<SignupPage />} />
             <Route element={<RequireAuth />}>
               <Route element={<AppLayout />}>
                 <Route index element={<HomePage />} />

@@ -1,8 +1,9 @@
 import { useRef, useState } from 'react'
 import { useAuth } from '../features/auth/AuthProvider'
+import { changePassword } from '../features/auth/authService'
 import { useRemoveAvatar, useUploadAvatar } from '../lib/hooks'
 import { UserAvatar } from '../components/UserAvatar'
-import { Button, ErrorText, PageTitle, Panel } from '../components/ui/primitives'
+import { Button, ErrorText, Field, Input, PageTitle, Panel } from '../components/ui/primitives'
 
 export function ProfilePage() {
   const { profile } = useAuth()
@@ -10,6 +11,10 @@ export function ProfilePage() {
   const removeAvatar = useRemoveAvatar()
   const fileRef = useRef<HTMLInputElement>(null)
   const [error, setError] = useState<string | null>(null)
+  const [pwdMsg, setPwdMsg] = useState<string | null>(null)
+  const [pwdBusy, setPwdBusy] = useState(false)
+  const [currentPassword, setCurrentPassword] = useState('')
+  const [newPassword, setNewPassword] = useState('')
 
   async function onFileSelected(file: File | undefined) {
     if (!file) return
@@ -76,6 +81,53 @@ export function ProfilePage() {
           </div>
           {error && <ErrorText>{error}</ErrorText>}
         </div>
+      </Panel>
+
+      <Panel>
+        <h2 className="font-display text-2xl">Alterar senha</h2>
+        <form
+          className="mt-3 grid max-w-md gap-3"
+          onSubmit={(e) => {
+            e.preventDefault()
+            setError(null)
+            setPwdMsg(null)
+            setPwdBusy(true)
+            void changePassword(currentPassword, newPassword)
+              .then(() => {
+                setCurrentPassword('')
+                setNewPassword('')
+                setPwdMsg('Senha atualizada.')
+              })
+              .catch((err) => {
+                setError(err instanceof Error ? err.message : 'Falha ao alterar senha')
+              })
+              .finally(() => setPwdBusy(false))
+          }}
+        >
+          <Field label="Senha atual">
+            <Input
+              type="password"
+              autoComplete="current-password"
+              value={currentPassword}
+              onChange={(e) => setCurrentPassword(e.target.value)}
+              required
+            />
+          </Field>
+          <Field label="Nova senha">
+            <Input
+              type="password"
+              autoComplete="new-password"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              required
+              minLength={8}
+            />
+          </Field>
+          {pwdMsg && <p className="text-sm text-citrus">{pwdMsg}</p>}
+          <Button type="submit" disabled={pwdBusy}>
+            {pwdBusy ? 'Salvando…' : 'Salvar senha'}
+          </Button>
+        </form>
       </Panel>
     </div>
   )

@@ -2,31 +2,23 @@
 
 ## profiles
 
+Tabela de usuários da aplicação (**sem** `auth.users` / Supabase Auth).
+
 | Column | Type | Notes |
 |--------|------|-------|
-| id | uuid PK | = auth.users.id |
+| id | uuid PK | `gen_random_uuid()` — não referencia `auth.users` |
 | name | text not null | |
-| username | text unique not null | |
-| email | text unique | mirror for display/lookup |
+| username | text unique not null | login |
+| email | text unique null | opcional; também serve de login |
+| **password_hash** | **text not null** | **bcrypt/argon2; nunca plaintext; nunca SELECT no client** |
 | role | text not null | `admin` \| `user` |
-| active | boolean not null default true | |
+| active | boolean not null default true | inativo não autentica / RLS bloqueia |
 | avatar_path | text null | Storage path in `avatars` bucket |
 | created_at / updated_at / last_login_at | timestamptz | |
 
-## invites
+Privileges: `anon`/`authenticated` **não** têm `SELECT`/`UPDATE` em `password_hash`. Leitura/escrita do hash só via **service_role** nas Edge Functions.
 
-| Column | Type | Notes |
-|--------|------|-------|
-| id | uuid PK | |
-| email | text not null | |
-| username | text not null | |
-| name | text not null | |
-| role | text not null default `user` | |
-| token | text unique not null | random |
-| created_by | uuid → profiles | |
-| used_at | timestamptz null | |
-| expires_at | timestamptz | |
-| created_at | timestamptz | |
+Seed do primeiro admin: ver `supabase/seed.sql` (username `admin`, senha documentada + hash bcrypt).
 
 ## groups / group_members
 
@@ -48,51 +40,30 @@ RPC `draw_outing_idea` accepts optional filters and prefers ideas not drawn in t
 
 ## Edge Function suggest-places (MVP 3)
 
-Not a table: interprets natural-language intent (AI or heuristic) and searches real places via Geoapify. Secrets stay on Supabase.
+Input: free-text prompt and/or structured filters. Output: normalized filters + real places from provider (never invented). Secrets only on the function.
 
-## event_comments
+## event_comments / outing_votes / event_history / event_photos
 
-message text; event_id + user_id; author can update/delete; admin can delete.
+MVP 2 social layer. Photos use Storage bucket `event-photos` + path metadata.
 
-## outing_votes
+## event_expenses / expense_participants / notifications
 
-unique (outing_idea_id, user_id) — one vote per user per idea.
+MVP 4. Split expenses per event; in-app notifications; stats RPCs.
 
-## event_history
+## Auth model
 
-Append-only audit via trigger on `events` insert/update. Actions: `created` | `edited` | `cancelled` | `restored` | `completed`. Clients read-only.
+1. Admin cria usuário (Edge Function) com senha → `password_hash`.
+2. Login (Edge Function) valida username/email + hash → JWT HS256.
+3. SPA envia `Authorization: Bearer <jwt>` em todas as chamadas PostgREST/Storage/Functions.
+4. RLS usa `auth.uid()` (= claim `sub` do JWT).
 
-## event_photos + Storage
-
-Metadata table `event_photos` (storage_path). Bucket `event-photos` (public read, 5 MB, image mime types). Path: `{event_id}/{uuid}.ext`.
-
-## Profile avatars + Storage
+## Storage
 
 `profiles.avatar_path` stores object path in bucket `avatars` (public read, 5 MB, image mime types). Path: `{user_id}/{uuid}.ext`. Authenticated active user uploads/updates/deletes only own folder; admin may delete.
-
-## event_expenses / expense_participants (MVP 4)
-
-`event_expenses`: description, amount, paid_by, event_id.
-`expense_participants`: who splits the expense (`share_amount` for equal/custom split). Members of the event group can read; payer (or admin) writes.
-
-## notifications (MVP 4)
-
-In-app notifications per user: type, title, message, read, optional event_id.
-Inserted by security-definer triggers (event create/update, comment, expense). Clients read/update own rows; RPC `mark_notifications_read`.
-
-## Stats / badges (MVP 4)
-
-RPC `get_group_stats(group_id)` → aggregates (events, attendance, ideas, votes, comments, photos, expenses, top lists).
-RPC `get_my_badges(group_id)` → computed achievement badges for the current user (no persistent badge table).
-
-## Realtime (MVP 4)
-
-Publication includes `notifications`, `event_comments`, `event_attendees`, `event_expenses` for live UI invalidation.
 
 ## RLS summary
 
 - Authenticated + `profiles.active` for reads/writes in group.
-- Admin-only for invites insert/update and profile role/active changes.
-- Members manage events/attendees/ideas/comments/votes/photos/expenses in their groups.
-- Notifications: only own rows; inserts via triggers.
-- Public (anon): only invite token validation RPC as needed for signup page; public read of photo bucket objects.
+- Admin-only for profile role/active changes and user creation (via Functions).
+- `password_hash` inaccessible to browser roles.
+- Public (anon): only `login` Edge Function (no open registration).

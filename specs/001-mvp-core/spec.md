@@ -6,41 +6,41 @@
 
 **Status**: Draft
 
-**Input**: Implementar Balelagenda (MVP 1) como SPA React + Supabase client-only (sem backend próprio), com Auth, PostgREST e RLS.
+**Input**: Implementar Balelagenda (MVP 1) como SPA React + Supabase (PostgREST/RLS/Edge Functions; sem backend próprio; sem Supabase Auth).
 
 ## User Scenarios & Testing *(mandatory)*
 
-### User Story 1 - Login com Supabase Auth (Priority: P1)
+### User Story 1 - Login com senha (auth custom) (Priority: P1)
 
-Como membro, quero entrar com e-mail/username e senha (Supabase Auth) para acessar a agenda privada.
+Como membro, quero entrar com username/e-mail e senha para acessar a agenda privada, com sessão persistente.
 
 **Why this priority**: Sem autenticação não há sistema privado.
 
-**Independent Test**: Seed/admin existente faz login, vê dashboard, logout.
+**Independent Test**: Seed/admin existente faz login, vê dashboard, refresh mantém sessão, logout.
 
 **Acceptance Scenarios**:
 
-1. **Given** perfil ativo vinculado a auth.users, **When** login com credenciais válidas, **Then** sessão Supabase é criada e rotas protegidas abrem.
-2. **Given** credenciais inválidas, **When** tenta login, **Then** erro genérico amigável.
+1. **Given** perfil ativo com `password_hash`, **When** login com username/senha válidos via Edge Function, **Then** JWT é emitido, sessão persiste no client e rotas protegidas abrem.
+2. **Given** credenciais inválidas ou usuário inativo, **When** tenta login, **Then** erro genérico e sem token.
 3. **Given** `profiles.active = false`, **When** autentica ou carrega app, **Then** acesso aos dados é bloqueado (RLS + gate na UI) e logout é forçado.
-4. **Given** sessão válida, **When** logout, **Then** sessão encerra e rotas exigem novo login.
+4. **Given** sessão válida, **When** logout, **Then** storage limpa e rotas exigem novo login.
 
 ---
 
-### User Story 2 - Administração de usuários / convites (Priority: P1)
+### User Story 2 - Administração de usuários (Priority: P1)
 
-Como admin, quero convidar, editar, desativar e reativar membros sem service_role no browser.
+Como admin, quero criar usuários (com senha), editar, desativar e reativar membros sem service_role no browser.
 
-**Why this priority**: Sem auto-cadastro aberto; grupo é provisionado.
+**Why this priority**: Sem auto-cadastro aberto; grupo é provisionado pelo admin.
 
-**Independent Test**: Admin cria convite; convidado completa signup; admin desativa e acesso some.
+**Independent Test**: Admin cria usuário com senha; usuário faz login; admin desativa e acesso some.
 
 **Acceptance Scenarios**:
 
-1. **Given** admin, **When** cria convite (e-mail, username, role), **Then** registro fica em `invites` consumível uma vez.
-2. **Given** convite válido, **When** convidado faz signup, **Then** perfil é criado ativo e convite marcado como usado.
-3. **Given** usuário comum, **When** tenta mutações admin, **Then** RLS rejeita.
-4. **Given** desativação, **When** admin define `active=false`, **Then** usuário deixa de ler/escrever dados do grupo; último admin ativo não pode ser desativado.
+1. **Given** admin, **When** cria usuário (nome, username, senha, role), **Then** perfil ativo é gravado com `password_hash` (Edge Function).
+2. **Given** admin, **When** redefine senha de um usuário, **Then** novo hash é gravado e o login antigo falha.
+3. **Given** usuário comum, **When** tenta mutações admin, **Then** RLS / Function rejeita.
+4. **Given** desativação, **When** admin define `active=false`, **Then** usuário deixa de autenticar e de ler/escrever; último admin ativo não pode ser desativado.
 
 ---
 
@@ -96,39 +96,40 @@ Como membro, quero cadastrar ideias e sortear um rolê, podendo criar evento a p
 
 ### Edge Cases
 
-- Convite expirado/usado: signup falha com mensagem clara.
+- Usuário inativo: login e RLS falham.
 - Anon key apenas: tentativas de bypass via REST sem JWT falham por RLS.
 - Sorteio sem ideias: estado vazio amigável.
+- `password_hash` nunca retornado ao client (grants de coluna + selects explícitos).
 
 ## Requirements *(mandatory)*
 
 ### Functional Requirements
 
-- **FR-001**: App MUST ser SPA React falando só com Supabase via `supabase-js`.
-- **FR-002**: Auth MUST usar Supabase Auth; MUST NOT haver API própria hospedada pelo time.
-- **FR-003**: Autorização MUST ser RLS (+ RPC SECURITY DEFINER quando inevitável).
-- **FR-004**: Client env MUST ser apenas URL + anon key.
-- **FR-005**: Admins MUST gerenciar perfis/convites conforme US2.
+- **FR-001**: App MUST ser SPA React falando só com Supabase via `supabase-js` + Edge Functions.
+- **FR-002**: Auth MUST ser custom (`profiles.password_hash` + Edge Functions JWT); MUST NOT usar Supabase Auth; MUST NOT haver API própria hospedada pelo time.
+- **FR-003**: Autorização MUST ser RLS (+ RPC SECURITY DEFINER quando inevitável); JWT custom popula `auth.uid()`.
+- **FR-004**: Client env MUST ser apenas URL + anon key (`JWT_SECRET` / `service_role` só nas Functions/servidor).
+- **FR-005**: Admins MUST criar/editar/desativar usuários e redefinir senhas conforme US2.
 - **FR-006**: Membros MUST CRUD eventos (cancel = status), presença, ideias e sorteio.
 - **FR-007**: Soft deactivate profiles; last admin protected.
-- **FR-008**: Mobile-first UI com loading/erro/feedback.
+- **FR-008**: Mobile-first UI com loading/erro/feedback; sessão persistente + logout.
 
 ### Key Entities
 
-- **auth.users** (Supabase) + **profiles** (app)
-- **invites**, **groups**, **group_members**
+- **profiles** (com `password_hash`; sem `auth.users`)
+- **groups**, **group_members**
 - **events**, **event_attendees**
 - **outing_ideas**, **outing_history**
 
 ## Success Criteria *(mandatory)*
 
-- **SC-001**: Deploy estático + Supabase cloud funciona sem servidor de app.
-- **SC-002**: Usuário comum não consegue mutações admin (RLS).
-- **SC-003**: Fluxo convite → signup → login → criar evento → presença → sorteio completo.
-- **SC-004**: Sem `service_role` no bundle frontend.
+- **SC-001**: Deploy estático + Supabase cloud funciona sem servidor de app próprio.
+- **SC-002**: Usuário comum não consegue mutações admin (RLS / Functions).
+- **SC-003**: Fluxo admin cria usuário → login → criar evento → presença → sorteio completo.
+- **SC-004**: Sem `service_role` / `JWT_SECRET` / `password_hash` no bundle frontend.
 
 ## Assumptions
 
-- Pivot consciente: spec original pedia auth custom + Edge Functions; restrição de hospedagem obriga Supabase Auth + RLS.
-- Primeiro admin criado no Dashboard Supabase + SQL de perfil/grupo.
-- SQL functions no Postgres (RPC) são permitidas (fazem parte do Supabase, não são “servidor próprio”).
+- Auth custom via Edge Functions do Supabase (não é backend hospedado pelo usuário).
+- Primeiro admin via `supabase/seed.sql` (username + bcrypt hash documentado).
+- SQL functions no Postgres (RPC) e Edge Functions são permitidas (fazem parte do Supabase).

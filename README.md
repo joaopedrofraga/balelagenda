@@ -1,50 +1,42 @@
 # Balelagenda
 
-Agenda social privada para um grupo de amigos — **SPA React + Supabase** (sem backend próprio).
+Agenda social privada para um grupo de amigos — **SPA React + Supabase** (Postgres/RLS/Storage/Edge Functions; **sem** Supabase Auth; **sem** backend próprio).
 
 ## Arquitetura
 
 ```text
-React (Vite)  --supabase-js (anon key)-->  Supabase Auth + Postgres (RLS) + RPCs
-              --functions.invoke------->  Edge Functions (IA / Places; secrets no servidor)
+React (Vite)  --anon key + JWT custom-->  Postgres (RLS) + Storage + RPCs
+              --Edge Functions--------->  login / admin-create-user / senhas / suggest-places
 ```
 
 - Hospedagem: frontend estático no **Vercel** (Root Directory = `web`)
-- Dados e auth: Supabase cloud
-- **Nunca** coloque `service_role` no frontend
+- Auth: tabela `profiles.password_hash` + Edge Functions; JWT assinado com o **JWT Secret** do projeto (compatível com `auth.uid()`)
+- Sessão: JWT em `localStorage` (`balelagenda_access_token`); TTL ~30 dias
+- **Nunca** coloque `service_role` ou `JWT_SECRET` no frontend
+- **Não** use Dashboard → Authentication → Users, Confirm email, convites ou `signInWithPassword`
 
 ### Keep-alive do Supabase (free tier)
 
-O plano free da Supabase pode **pausar o projeto após ~7 dias sem atividade**. Isso **não dá para resolver de forma confiável só com React**: o código da SPA só roda quando alguém abre o site. Se ninguém visitar, nenhum ping acontece — exatamente o cenário do pause.
+O plano free da Supabase pode **pausar o projeto após ~7 dias sem atividade**. Isso **não dá para resolver de forma confiável só com React**: o código da SPA só roda quando alguém abre o site.
 
-**Não faça** `useEffect` no App pingando o banco a cada X dias no browser (só roda com visitante; não evita pause).
+**Solução neste repo:** Vercel Cron + serverless function `web/api/keepalive.ts`. Agenda diária `0 12 * * *` (UTC).
 
-**Solução neste repo:** Vercel Cron + serverless function `web/api/keepalive.ts` (mesmo projeto do frontend — não é um backend hospedado à parte). Agenda diária `0 12 * * *` (Hobby: mínimo ~1×/dia).
+No Vercel (Root Directory = `web`):
 
-No Vercel (projeto com Root Directory = `web`):
-
-1. Environment Variables:
-   - `CRON_SECRET` — valor aleatório forte
-   - `SUPABASE_URL` — Project URL (sem `VITE_`)
-   - `SUPABASE_SERVICE_ROLE_KEY` — service role (só na Function; nunca no frontend)
-2. Deploy; o Cron Jobs aparece em Project → Settings → Cron Jobs apontando para `/api/keepalive`
-3. Validar: `curl -H "Authorization: Bearer SEU_CRON_SECRET" https://SEU-APP.vercel.app/api/keepalive` → `{ "ok": true, "at": "..." }`
-
-Aviso: a política de pause do free tier pode mudar; keep-alive **ajuda**, mas **não é garantia oficial** da Supabase.
-
-Alternativas que batem na mesma URL: GitHub Actions (schedule) ou [cron-job.org](https://cron-job.org).
+1. Env: `CRON_SECRET`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` (só na Function)
+2. Validar: `curl -H "Authorization: Bearer SEU_CRON_SECRET" https://SEU-APP.vercel.app/api/keepalive`
 
 ## Spec Kit
 
 Fluxo SDD em `.specify/` e feature `specs/001-mvp-core/`.
-Constituição v2: Auth via Supabase + RLS (pivot sem servidor de app).
+Constituição v3: auth custom (Edge Functions) + RLS — sem Supabase Auth.
 
-## Setup rápido
+## Setup rápido (local)
 
-1. Crie um projeto no Supabase
-2. Rode as migrations em `supabase/migrations/` (SQL Editor, na ordem)
-3. Desative confirmação de e-mail (Authentication → Providers → Email) para o fluxo de convite
-4. Rode `supabase/seed.sql` (grupo padrão) e o bloco de bootstrap do admin
+1. Crie um projeto no Supabase (anote URL, anon, service_role, **JWT Secret**)
+2. Rode as migrations `001→007` + `supabase/seed.sql` (grupo + admin `admin` / `Admin@ChangeMe1!`)
+3. `supabase secrets set JWT_SECRET="…"` (= JWT Secret do projeto)
+4. Deploy: `login`, `admin-create-user`, `admin-set-password`, `change-password`
 5. Em `web/`:
 
 ```powershell
@@ -55,40 +47,29 @@ npm install
 npm run dev
 ```
 
-Detalhes: `specs/001-mvp-core/quickstart.md`
+## Produção (Supabase + Vercel)
+
+**Runbook completo (do zero):** [`specs/001-mvp-core/quickstart.md`](specs/001-mvp-core/quickstart.md) → seção **“Produção — runbook completo”**.
+
+Cobre: arquitetura, credenciais (incl. JWT Secret), migrations 001→007 + seed, Storage, Realtime, secrets/deploy das Edge Functions, verificação do admin seed, GitHub, Vercel, keep-alive, smoke test, troubleshooting e checklist.
+
+| Passo | Detalhe |
+|---|---|
+| Migrations | SQL Editor, ordem `001` … `007` + `seed.sql` |
+| Auth | **Não** use Auth Users / Confirm email / convites |
+| Admin seed | username `admin`, senha `Admin@ChangeMe1!` (troque depois) |
+| Edge Functions | `login`, `admin-create-user`, `admin-set-password`, `change-password` + `JWT_SECRET` |
+| Buckets | `event-photos` e `avatars` vêm das migrations 004 e 007 |
+| Vercel | Root Directory = `web`; env `VITE_*` + keepalive secrets |
+| Keep-alive | Cron → `/api/keepalive` |
 
 ## MVP 1 incluído
 
-- Login (e-mail ou username) via Supabase Auth
-- Signup por convite (admin)
-- Admin: listar/desativar/reativar/roles + convites
+- Login (username ou e-mail) + senha via Edge Function `login`
+- Sessão persistente (JWT em `localStorage`) + logout
+- Admin: criar usuário com senha, desativar/reativar, roles, redefinir senha
 - Grupo, agenda/eventos, presença, ideias, sorteio
 
-## MVP 2 incluído
+## MVP 2–4
 
-- Comentários no evento
-- Votação nas ideias
-- Histórico de alterações do evento
-- Fotos (Supabase Storage, bucket `event-photos`)
-- Memórias (timeline de eventos `completed`)
-
-## MVP 3 incluído
-
-- Página **Sugestões** (`/sugestoes`): texto livre → filtros estruturados → lugares reais
-- Edge Function `suggest-places` (chaves `AI_API_KEY` / `PLACES_API_KEY` só no Supabase)
-- Filtros inteligentes no sorteio (categoria, orçamento, horário, ambiente, anti-repetição)
-- Campos `period` / `ambiance` / orçamento nas ideias
-- Fallback local se a Edge Function ainda não estiver deployada (não inventa lugares)
-
-## MVP 4 incluído
-
-- Despesas por evento (lançamento, participantes, rateio e saldos)
-- Notificações in-app (eventos, comentários, despesas) + marcar como lidas
-- Realtime (avisos, presença, comentários, despesas)
-- Estatísticas do grupo + badges pessoais (`/estatisticas`)
-- PWA instalável (manifest + service worker)
-- Foto de perfil (bucket Storage `avatars`, página `/perfil`)
-
-## Próximos
-
-Push nativo, testes automatizados e CI.
+Comentários, votos, fotos, memórias, sugestões IA/Places, despesas, notificações, estatísticas, PWA, avatar de perfil — ver quickstart e migrations `004`–`007`.

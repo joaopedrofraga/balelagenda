@@ -1,11 +1,11 @@
 import { useState } from 'react'
-import { Link, Navigate, useNavigate } from 'react-router-dom'
+import { Navigate, useNavigate } from 'react-router-dom'
 import { loginWithIdentifier } from './authService'
 import { useAuth } from './AuthProvider'
 import { Button, ErrorText, Field, Input, Panel } from '../../components/ui/primitives'
 
 export function LoginPage() {
-  const { session, loading } = useAuth()
+  const { session, loading, acceptSession } = useAuth()
   const navigate = useNavigate()
   const [identifier, setIdentifier] = useState('')
   const [password, setPassword] = useState('')
@@ -20,6 +20,7 @@ export function LoginPage() {
     setError(null)
     try {
       await loginWithIdentifier(identifier, password)
+      await acceptSession()
       navigate('/')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Falha no login')
@@ -60,10 +61,7 @@ export function LoginPage() {
           </Button>
         </form>
         <p className="mt-4 text-center text-sm text-mist/60">
-          Tem convite?{' '}
-          <Link className="text-citrus underline" to="/signup">
-            Criar acesso
-          </Link>
+          Contas são criadas pelo administrador do grupo.
         </p>
       </Panel>
     </div>

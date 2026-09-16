@@ -6,6 +6,10 @@ alter table public.profiles
 comment on column public.profiles.avatar_path is
   'Path inside the avatars Storage bucket (e.g. {user_id}/{uuid}.ext). Null = no photo.';
 
+-- Column-level grants (password_hash permanece revogado em 002)
+grant select (avatar_path) on table public.profiles to authenticated;
+grant update (avatar_path) on table public.profiles to authenticated;
+
 -- ---------------------------------------------------------------------------
 -- Storage bucket + policies (same pattern as event-photos)
 -- ---------------------------------------------------------------------------

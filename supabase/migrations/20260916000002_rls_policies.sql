@@ -1,13 +1,27 @@
--- RLS policies — segurança no Postgres (sem BFF)
+-- RLS policies — segurança no Postgres (JWT custom → auth.uid() via claim sub)
 
 alter table public.profiles enable row level security;
-alter table public.invites enable row level security;
 alter table public.groups enable row level security;
 alter table public.group_members enable row level security;
 alter table public.events enable row level security;
 alter table public.event_attendees enable row level security;
 alter table public.outing_ideas enable row level security;
 alter table public.outing_history enable row level security;
+
+-- ---------------------------------------------------------------------------
+-- Column privileges: password_hash NUNCA para anon/authenticated
+-- (service_role / postgres bypassa; Edge Functions usam service_role)
+-- ---------------------------------------------------------------------------
+revoke all on table public.profiles from anon, authenticated;
+
+grant select (
+  id, name, username, email, role, active,
+  created_at, updated_at, last_login_at
+) on table public.profiles to authenticated;
+
+grant update (
+  name, email, role, active, updated_at, last_login_at
+) on table public.profiles to authenticated;
 
 -- Helpers
 create or replace function public.is_active_user()
@@ -53,7 +67,7 @@ as $$
   );
 $$;
 
--- profiles
+-- profiles (sem INSERT pelo client — criação só via Edge Function + service_role)
 create policy profiles_select_active on public.profiles
 for select to authenticated
 using (
@@ -68,16 +82,6 @@ with check (id = auth.uid());
 
 create policy profiles_admin_update on public.profiles
 for update to authenticated
-using (public.is_admin())
-with check (public.is_admin());
-
-create policy profiles_admin_insert on public.profiles
-for insert to authenticated
-with check (public.is_admin() or id = auth.uid());
-
--- invites
-create policy invites_admin_all on public.invites
-for all to authenticated
 using (public.is_admin())
 with check (public.is_admin());
 

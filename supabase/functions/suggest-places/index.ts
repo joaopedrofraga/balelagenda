@@ -65,18 +65,37 @@ Deno.serve(async (req) => {
 
   try {
     const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
+    if (!authHeader?.startsWith("Bearer ")) {
       return json({ error: "Não autenticado" }, 401);
     }
 
+    const jwt = authHeader.slice("Bearer ".length);
+    let userId: string | null = null;
+    try {
+      const payload = JSON.parse(atob(jwt.split(".")[1] ?? "")) as { sub?: string };
+      userId = payload.sub ?? null;
+    } catch {
+      userId = null;
+    }
+    if (!userId) {
+      return json({ error: "Sessão inválida" }, 401);
+    }
+
+    // Auth custom (JWT HS256 do projeto) — valida via PostgREST + RLS (auth.uid())
     const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
     const supabase = createClient(supabaseUrl, anonKey, {
       global: { headers: { Authorization: authHeader } },
+      auth: { persistSession: false, autoRefreshToken: false },
     });
 
-    const { data: userData, error: userError } = await supabase.auth.getUser();
-    if (userError || !userData.user) {
+    const { data: me, error: meError } = await supabase
+      .from("profiles")
+      .select("id, active")
+      .eq("id", userId)
+      .eq("active", true)
+      .maybeSingle();
+    if (meError || !me) {
       return json({ error: "Sessão inválida" }, 401);
     }
 

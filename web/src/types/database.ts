@@ -16,6 +16,7 @@ export type Profile = {
   updated_at: string
   last_login_at: string | null
 }
+/** password_hash exists only no servidor — nunca tipar/selecionar no client. */
 
 /** Nested profile fields commonly selected with related rows */
 export type ProfileRef = Pick<Profile, 'id' | 'name' | 'username' | 'avatar_path'>
@@ -79,19 +80,6 @@ export type OutingIdea = {
   ambiance: string | null
   created_by: string
   active: boolean
-  created_at: string
-}
-
-export type Invite = {
-  id: string
-  email: string
-  username: string
-  name: string
-  role: UserRole
-  token: string
-  created_by: string | null
-  used_at: string | null
-  expires_at: string
   created_at: string
 }
 
@@ -208,7 +196,6 @@ export type Database = {
       events: { Row: EventRow; Insert: Partial<EventRow> & Pick<EventRow, 'group_id' | 'title' | 'start_at' | 'created_by'>; Update: Partial<EventRow> }
       event_attendees: { Row: EventAttendee; Insert: Partial<EventAttendee> & Pick<EventAttendee, 'event_id' | 'user_id' | 'status'>; Update: Partial<EventAttendee> }
       outing_ideas: { Row: OutingIdea; Insert: Partial<OutingIdea> & Pick<OutingIdea, 'group_id' | 'title' | 'created_by'>; Update: Partial<OutingIdea> }
-      invites: { Row: Invite; Insert: Partial<Invite> & Pick<Invite, 'email' | 'username' | 'name'>; Update: Partial<Invite> }
       outing_history: { Row: { id: string; group_id: string; outing_idea_id: string; event_id: string | null; selected_at: string }; Insert: Partial<{ id: string; group_id: string; outing_idea_id: string; event_id: string | null; selected_at: string }>; Update: never }
       event_comments: { Row: EventComment; Insert: Partial<EventComment> & Pick<EventComment, 'event_id' | 'user_id' | 'message'>; Update: Partial<EventComment> }
       outing_votes: { Row: OutingVote; Insert: Partial<OutingVote> & Pick<OutingVote, 'outing_idea_id' | 'user_id'>; Update: never }
@@ -231,12 +218,6 @@ export type Database = {
       }
     }
     Functions: {
-      resolve_login_email: { Args: { p_username: string }; Returns: string }
-      get_invite_by_token: {
-        Args: { p_token: string }
-        Returns: { id: string; email: string; username: string; name: string; role: UserRole; expires_at: string }[]
-      }
-      complete_invite_signup: { Args: { p_token: string }; Returns: Profile }
       touch_last_login: { Args: Record<string, never>; Returns: void }
       draw_outing_idea: {
         Args: {

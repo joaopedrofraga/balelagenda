@@ -21,8 +21,11 @@ import { useAuth } from '../features/auth/AuthProvider'
 const EVENT_PHOTOS_BUCKET = 'event-photos'
 const AVATARS_BUCKET = 'avatars'
 const AVATAR_MAX_BYTES = 5 * 1024 * 1024
-/** Nested profile columns used across event/comment/member joins */
+/** Nested profile columns used across event/comment/member joins — never password_hash */
 export const PROFILE_REF = 'id,name,username,avatar_path'
+/** Full public profile columns (excludes password_hash) */
+export const PROFILE_PUBLIC =
+  'id, name, username, email, role, active, avatar_path, created_at, updated_at, last_login_at'
 
 export function photoPublicUrl(storagePath: string) {
   const { data } = supabase.storage.from(EVENT_PHOTOS_BUCKET).getPublicUrl(storagePath)
@@ -231,7 +234,7 @@ export function useGroupMembers(groupId: string | null | undefined) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('group_members')
-        .select('*, profiles(*)')
+        .select(`*, profiles(${PROFILE_PUBLIC})`)
         .eq('group_id', groupId!)
         .eq('active', true)
       if (error) throw error
@@ -244,7 +247,10 @@ export function useProfilesAdmin() {
   return useQuery({
     queryKey: ['admin-profiles'],
     queryFn: async () => {
-      const { data, error } = await supabase.from('profiles').select('*').order('created_at')
+      const { data, error } = await supabase
+        .from('profiles')
+        .select(PROFILE_PUBLIC)
+        .order('created_at')
       if (error) throw error
       return data as Profile[]
     },
@@ -339,34 +345,6 @@ export function useRemoveAvatar() {
       void qc.invalidateQueries({ queryKey: ['event-expenses'] })
       void qc.invalidateQueries({ queryKey: ['group-stats'] })
     },
-  })
-}
-
-export function useInvites() {
-  return useQuery({
-    queryKey: ['invites'],
-    queryFn: async () => {
-      const { data, error } = await supabase.from('invites').select('*').order('created_at', { ascending: false })
-      if (error) throw error
-      return data
-    },
-  })
-}
-
-export function useCreateInvite() {
-  const qc = useQueryClient()
-  const { profile } = useAuth()
-  return useMutation({
-    mutationFn: async (payload: { email: string; username: string; name: string; role: UserRole }) => {
-      const { data, error } = await supabase
-        .from('invites')
-        .insert({ ...payload, created_by: profile?.id ?? null })
-        .select()
-        .single()
-      if (error) throw error
-      return data
-    },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['invites'] }),
   })
 }
 

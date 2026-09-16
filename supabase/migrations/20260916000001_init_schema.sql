@@ -1,14 +1,15 @@
--- Balelagenda: schema inicial (SPA + Supabase Auth + RLS)
--- Auth: auth.users (Supabase). Perfis e domínio na public.
+-- Balelagenda: schema inicial (SPA + auth custom via Edge Functions + RLS)
+-- Perfis em public.profiles com password_hash. Sem auth.users / Supabase Auth.
 
 create extension if not exists "pgcrypto";
 
--- Profiles (1:1 com auth.users)
+-- Profiles (usuários da aplicação; id próprio — não referencia auth.users)
 create table public.profiles (
-  id uuid primary key references auth.users (id) on delete cascade,
+  id uuid primary key default gen_random_uuid(),
   name text not null,
   username text not null unique,
   email text unique,
+  password_hash text not null,
   role text not null check (role in ('admin', 'user')) default 'user',
   active boolean not null default true,
   created_at timestamptz not null default now(),
@@ -16,18 +17,8 @@ create table public.profiles (
   last_login_at timestamptz
 );
 
-create table public.invites (
-  id uuid primary key default gen_random_uuid(),
-  email text not null,
-  username text not null,
-  name text not null,
-  role text not null check (role in ('admin', 'user')) default 'user',
-  token text not null unique default encode(gen_random_bytes(24), 'hex'),
-  created_by uuid references public.profiles (id),
-  used_at timestamptz,
-  expires_at timestamptz not null default (now() + interval '14 days'),
-  created_at timestamptz not null default now()
-);
+comment on column public.profiles.password_hash is
+  'Hash bcrypt/argon2 da senha. Nunca plaintext. Só Edge Functions (service_role) leem/escrevem.';
 
 create table public.groups (
   id uuid primary key default gen_random_uuid(),
@@ -97,6 +88,7 @@ create table public.outing_history (
 create index events_group_start_idx on public.events (group_id, start_at);
 create index group_members_user_idx on public.group_members (user_id);
 create index outing_ideas_group_active_idx on public.outing_ideas (group_id, active);
+create index profiles_username_lower_idx on public.profiles (lower(username));
 
 -- updated_at helper
 create or replace function public.set_updated_at()
@@ -117,3 +109,22 @@ for each row execute function public.set_updated_at();
 
 create trigger events_updated_at before update on public.events
 for each row execute function public.set_updated_at();
+
+-- Impede UPDATE direto de password_hash via clientes (só service_role / security definer)
+create or replace function public.forbid_password_hash_client_update()
+returns trigger
+language plpgsql
+as $$
+begin
+  if new.password_hash is distinct from old.password_hash then
+    if current_setting('request.jwt.claim.role', true) in ('authenticated', 'anon') then
+      raise exception 'password_hash só pode ser alterado via Edge Function';
+    end if;
+  end if;
+  return new;
+end;
+$$;
+
+create trigger trg_forbid_password_hash_client_update
+before update on public.profiles
+for each row execute function public.forbid_password_hash_client_update();
