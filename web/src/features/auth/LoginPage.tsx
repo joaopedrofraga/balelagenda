@@ -5,23 +5,25 @@ import { useAuth } from './AuthProvider'
 import { Button, ErrorText, Field, Input, Panel } from '../../components/ui/primitives'
 
 export function LoginPage() {
-  const { session, loading, acceptSession } = useAuth()
+  const { session, profile, loading, acceptSession } = useAuth()
   const navigate = useNavigate()
   const [identifier, setIdentifier] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
-  if (!loading && session) return <Navigate to="/" replace />
+  // Exige profile: session sozinha não autentica (token pode ter falhado no PostgREST).
+  if (!loading && session && profile) return <Navigate to="/" replace />
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault()
+    e.stopPropagation()
     setBusy(true)
     setError(null)
     try {
       await loginWithIdentifier(identifier, password)
       await acceptSession()
-      navigate('/')
+      navigate('/', { replace: true })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Falha no login')
     } finally {

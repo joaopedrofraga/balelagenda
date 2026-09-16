@@ -17,6 +17,10 @@ export async function loginWithIdentifier(identifier: string, password: string) 
     { auth: false },
   )
 
+  if (!data?.access_token || !data?.expires_at || !data?.user?.id) {
+    throw new Error('Resposta de login incompleta. Verifique o deploy da Function login.')
+  }
+
   setStoredSession({
     accessToken: data.access_token,
     expiresAt: data.expires_at,

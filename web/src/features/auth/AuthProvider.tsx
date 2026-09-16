@@ -16,20 +16,27 @@ import { getStoredSession, type StoredSession } from './sessionStorage'
 export const PROFILE_COLUMNS =
   'id, name, username, email, role, active, avatar_path, created_at, updated_at, last_login_at'
 
+const SESSION_NOT_ACCEPTED_MSG =
+  'Login ok, mas a API não autenticou a sessão. Confira se o secret JWT_SECRET das Edge Functions é idêntico ao JWT Secret do projeto (Supabase → Settings → API).'
+
 type AuthContextValue = {
   session: StoredSession | null
   profile: Profile | null
   loading: boolean
   isAdmin: boolean
   refreshProfile: () => Promise<void>
-  /** Após login bem-sucedido: recarrega sessão do storage + perfil. */
+  /** Após login bem-sucedido: valida token no PostgREST e hidrata perfil. */
   acceptSession: () => Promise<void>
   signOut: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)
 
-async function fetchProfile(userId: string): Promise<Profile | null> {
+type ProfileFetchResult =
+  | { ok: true; profile: Profile }
+  | { ok: false; reason: 'error' | 'empty' | 'inactive'; message?: string }
+
+async function fetchProfile(userId: string): Promise<ProfileFetchResult> {
   const { data, error } = await supabase
     .from('profiles')
     .select(PROFILE_COLUMNS)
@@ -37,34 +44,48 @@ async function fetchProfile(userId: string): Promise<Profile | null> {
     .maybeSingle()
 
   if (error) {
-    console.error(error)
-    return null
+    console.error('[auth] fetchProfile', error)
+    return { ok: false, reason: 'error', message: error.message }
   }
-  return data as Profile | null
+  if (!data) {
+    // Select vazio sem erro: típico de JWT rejeitado / auth.uid() nulo (RLS).
+    return { ok: false, reason: 'empty' }
+  }
+  const profile = data as Profile
+  if (!profile.active) {
+    return { ok: false, reason: 'inactive' }
+  }
+  return { ok: true, profile }
 }
+
+type HydrateResult = 'ok' | 'none' | 'invalid' | 'inactive'
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<StoredSession | null>(null)
   const [profile, setProfile] = useState<Profile | null>(null)
   const [loading, setLoading] = useState(true)
 
-  const hydrate = useCallback(async () => {
+  const hydrate = useCallback(async (): Promise<HydrateResult> => {
     const stored = getStoredSession()
     if (!stored) {
       setSession(null)
       setProfile(null)
-      return
+      return 'none'
     }
 
-    setSession(stored)
-    const p = await fetchProfile(stored.userId)
-    if (!p || !p.active) {
+    // Só promove sessão depois do perfil — evita race: Navigate com session e profile null.
+    const result = await fetchProfile(stored.userId)
+    if (!result.ok) {
       await logoutLocal()
       setSession(null)
       setProfile(null)
-      return
+      if (result.reason === 'inactive') return 'inactive'
+      return 'invalid'
     }
-    setProfile(p)
+
+    setSession(stored)
+    setProfile(result.profile)
+    return 'ok'
   }, [])
 
   const refreshProfile = useCallback(async () => {
@@ -74,19 +95,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(null)
       return
     }
-    const p = await fetchProfile(stored.userId)
-    if (!p || !p.active) {
+    const result = await fetchProfile(stored.userId)
+    if (!result.ok) {
       await logoutLocal()
       setSession(null)
       setProfile(null)
       return
     }
-    setProfile(p)
+    setProfile(result.profile)
     setSession(stored)
   }, [])
 
   const acceptSession = useCallback(async () => {
-    await hydrate()
+    const result = await hydrate()
+    if (result === 'ok') return
+    if (result === 'none') {
+      throw new Error('Sessão não foi gravada após o login. Tente novamente.')
+    }
+    if (result === 'inactive') {
+      throw new Error('Conta inativa. Peça ao administrador para reativar.')
+    }
+    throw new Error(SESSION_NOT_ACCEPTED_MSG)
   }, [hydrate])
 
   useEffect(() => {

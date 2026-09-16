@@ -19,8 +19,9 @@ export function RequireAuth() {
       <div className="mx-auto flex min-h-dvh max-w-md flex-col justify-center px-4 text-center">
         <h1 className="font-display text-3xl">Sessão inválida</h1>
         <p className="mt-2 text-mist/70">
-          Não foi possível carregar seu perfil. Faça login novamente ou peça ao admin para
-          reativar sua conta.
+          Não foi possível carregar seu perfil. Faça login novamente. Se o login “funciona” mas
+          volta aqui, confira se JWT_SECRET das Edge Functions = JWT Secret do projeto
+          (Settings → API).
         </p>
       </div>
     )
