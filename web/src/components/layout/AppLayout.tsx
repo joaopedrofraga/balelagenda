@@ -79,7 +79,7 @@ function MoreMenu({
         <div
           id={menuId}
           role="menu"
-          className="absolute bottom-full left-1/2 z-30 mb-2 w-48 -translate-x-1/2 rounded-xl border border-mist/15 bg-ink/98 p-1.5 shadow-[0_16px_40px_-20px_rgba(0,0,0,0.9)] backdrop-blur md:bottom-auto md:left-0 md:top-full md:mt-2 md:translate-x-0"
+          className="absolute bottom-full left-1/2 z-50 mb-2 w-48 -translate-x-1/2 rounded-xl border border-mist/15 bg-ink/98 p-1.5 shadow-[0_16px_40px_-20px_rgba(0,0,0,0.9)] backdrop-blur md:bottom-auto md:left-0 md:top-full md:mt-2 md:translate-x-0"
         >
           {moreLinks.map((item) => (
             <NavLink
@@ -136,7 +136,7 @@ function UserMenu() {
         <div
           id={menuId}
           role="menu"
-          className="absolute right-0 top-full z-30 mt-2 w-48 rounded-xl border border-mist/15 bg-ink/98 p-1.5 shadow-[0_16px_40px_-20px_rgba(0,0,0,0.9)] backdrop-blur"
+          className="absolute right-0 top-full z-50 mt-2 w-48 rounded-xl border border-mist/15 bg-ink/98 p-1.5 shadow-[0_16px_40px_-20px_rgba(0,0,0,0.9)] backdrop-blur"
         >
           <p className="truncate px-3 py-2 text-xs text-mist/50">{profile.username}</p>
           <NavLink
@@ -180,7 +180,7 @@ function UserMenu() {
 export function AppLayout() {
   return (
     <div className="mx-auto flex min-h-dvh max-w-5xl flex-col px-4 pb-24 pt-6 md:pb-8">
-      <header className="rise-in mb-6 flex items-end justify-between gap-4 md:mb-8">
+      <header className="rise-in relative z-40 mb-6 flex items-end justify-between gap-4 md:mb-8">
         <div>
           <p className="text-xs uppercase tracking-[0.2em] text-sky/80">agenda do rolê</p>
           <Link to="/" className="font-display text-4xl font-bold text-foam md:text-5xl">
@@ -193,7 +193,10 @@ export function AppLayout() {
         </div>
       </header>
 
-      <nav className="rise-in mb-6 hidden items-center gap-2 md:flex" aria-label="Principal">
+      <nav
+        className="rise-in relative z-40 mb-6 hidden items-center gap-2 md:flex"
+        aria-label="Principal"
+      >
         <NavLink to="/" end className={primaryLinkClass}>
           Início
         </NavLink>
@@ -206,12 +209,12 @@ export function AppLayout() {
         <MoreMenu linkClass={primaryLinkClass} />
       </nav>
 
-      <main className="rise-in flex-1">
+      <main className="rise-in relative z-0 flex-1">
         <Outlet />
       </main>
 
       <nav
-        className="fixed inset-x-0 bottom-0 z-20 border-t border-mist/10 bg-ink/95 backdrop-blur md:hidden"
+        className="fixed inset-x-0 bottom-0 z-40 border-t border-mist/10 bg-ink/95 backdrop-blur md:hidden"
         aria-label="Mobile"
       >
         <div className="mx-auto grid max-w-5xl grid-cols-4 gap-1 px-2 py-2 text-center text-[11px]">
