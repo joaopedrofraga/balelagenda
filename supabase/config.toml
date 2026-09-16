@@ -1,0 +1,14 @@
+# Balelagenda Supabase config
+# https://supabase.com/docs/guides/cli/config
+
+[project]
+# Preencha com o project_id do Dashboard se usar CLI
+
+[api]
+enabled = true
+
+[db]
+major_version = 15
+
+[functions.suggest-places]
+verify_jwt = true
