@@ -11,9 +11,18 @@ import {
   Panel,
   TextArea,
 } from '../components/ui/primitives'
-import { useCreateEvent, useDefaultGroupId, useEvents } from '../lib/hooks'
+import {
+  DEFAULT_GROUP_COLOR,
+  DEFAULT_PROFILE_COLOR,
+  eventMarkerColor,
+  useCreateEvent,
+  useDefaultGroup,
+  useDefaultGroupId,
+  useEvents,
+} from '../lib/hooks'
 import { dateKeyToLocalInput, parseDateKey, toDateKey } from '../lib/dateUtils'
-import type { EventRow } from '../types/database'
+import type { EventRow, EventScope } from '../types/database'
+import { useAuth } from '../features/auth/AuthProvider'
 
 function formatWhen(iso: string) {
   return new Intl.DateTimeFormat('pt-BR', {
@@ -45,7 +54,9 @@ function activeEvents(events: EventRow[] | undefined) {
 }
 
 export function HomePage() {
+  const { profile } = useAuth()
   const { data: groupId } = useDefaultGroupId()
+  const { data: group } = useDefaultGroup()
   const { data: events, isLoading } = useEvents(groupId)
   const createEvent = useCreateEvent()
 
@@ -59,18 +70,47 @@ export function HomePage() {
     description: '',
     start_at: dateKeyToLocalInput(todayKey),
     location_name: '',
+    scope: 'individual' as EventScope,
   })
 
+  const groupColor = group?.calendar_color ?? DEFAULT_GROUP_COLOR
   const live = useMemo(() => activeEvents(events), [events])
 
-  const eventCounts = useMemo(() => {
-    const map = new Map<string, number>()
+  const dayMarkers = useMemo(() => {
+    const map = new Map<string, { colors: string[]; count: number }>()
     for (const ev of live) {
       const key = toDateKey(new Date(ev.start_at))
-      map.set(key, (map.get(key) ?? 0) + 1)
+      const color = eventMarkerColor(ev, groupColor)
+      const existing = map.get(key)
+      if (!existing) {
+        map.set(key, { colors: [color], count: 1 })
+      } else {
+        existing.count += 1
+        if (!existing.colors.includes(color) && existing.colors.length < 3) {
+          existing.colors.push(color)
+        }
+      }
     }
     return map
-  }, [live])
+  }, [live, groupColor])
+
+  const legendItems = useMemo(() => {
+    const items: { key: string; label: string; color: string }[] = []
+    const seen = new Set<string>()
+    items.push({ key: 'group', label: 'Evento de grupo', color: groupColor })
+    seen.add(groupColor)
+    for (const ev of live) {
+      if (ev.scope === 'group') continue
+      const color = ev.profiles?.calendar_color || DEFAULT_PROFILE_COLOR
+      const name = ev.profiles?.name ?? 'Alguém'
+      const id = ev.created_by
+      if (seen.has(id)) continue
+      seen.add(id)
+      items.push({ key: id, label: name, color })
+      if (items.length >= 8) break
+    }
+    return items
+  }, [live, groupColor])
 
   const dayEvents = useMemo(
     () =>
@@ -97,6 +137,7 @@ export function HomePage() {
       description: '',
       start_at: dateKeyToLocalInput(selectedKey),
       location_name: '',
+      scope: 'individual',
     })
   }
 
@@ -111,6 +152,7 @@ export function HomePage() {
         description: form.description || undefined,
         start_at: new Date(form.start_at).toISOString(),
         location_name: form.location_name || undefined,
+        scope: form.scope,
       })
       setCreating(false)
       setForm({
@@ -118,6 +160,7 @@ export function HomePage() {
         description: '',
         start_at: dateKeyToLocalInput(selectedKey),
         location_name: '',
+        scope: 'individual',
       })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Não foi possível criar o evento.')
@@ -144,13 +187,29 @@ export function HomePage() {
           {isLoading ? (
             <p className="py-8 text-center text-mist/60">Carregando calendário…</p>
           ) : (
-            <MonthCalendar
-              month={month}
-              selectedKey={selectedKey}
-              eventCounts={eventCounts}
-              onMonthChange={setMonth}
-              onSelectDay={selectDay}
-            />
+            <>
+              <MonthCalendar
+                month={month}
+                selectedKey={selectedKey}
+                dayMarkers={dayMarkers}
+                onMonthChange={setMonth}
+                onSelectDay={selectDay}
+              />
+              {legendItems.length > 0 && (
+                <ul className="mt-4 flex flex-wrap gap-x-4 gap-y-2 border-t border-mist/10 pt-3 text-xs text-mist/70">
+                  {legendItems.map((item) => (
+                    <li key={item.key} className="inline-flex items-center gap-1.5">
+                      <span
+                        className="h-2.5 w-2.5 rounded-full"
+                        style={{ backgroundColor: item.color }}
+                        aria-hidden
+                      />
+                      {item.label}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </>
           )}
         </Panel>
 
@@ -179,6 +238,21 @@ export function HomePage() {
                   autoFocus
                   placeholder="Ex.: Churras na casa do João"
                 />
+              </Field>
+              <Field label="Tipo">
+                <select
+                  className="w-full rounded-xl border border-mist/15 bg-panel px-3 py-2.5 text-foam"
+                  value={form.scope}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, scope: e.target.value as EventScope }))
+                  }
+                >
+                  <option value="individual">
+                    Compromisso individual
+                    {profile?.calendar_color ? ` (${profile.calendar_color})` : ''}
+                  </option>
+                  <option value="group">Evento de grupo</option>
+                </select>
               </Field>
               <Field label="Data e horário">
                 <Input
@@ -219,24 +293,35 @@ export function HomePage() {
             />
           ) : (
             <ul className="space-y-2">
-              {dayEvents.map((ev) => (
-                <li key={ev.id}>
-                  <Link
-                    to={`/agenda/${ev.id}`}
-                    className="flex items-baseline justify-between gap-3 rounded-xl border border-mist/10 bg-ink/30 px-3 py-3 transition hover:border-citrus/40"
-                  >
-                    <div className="min-w-0">
-                      <p className="truncate font-medium text-foam">{ev.title}</p>
-                      {ev.location_name && (
-                        <p className="truncate text-xs text-mist/50">{ev.location_name}</p>
-                      )}
-                    </div>
-                    <span className="shrink-0 text-sm tabular-nums text-citrus">
-                      {formatTime(ev.start_at)}
-                    </span>
-                  </Link>
-                </li>
-              ))}
+              {dayEvents.map((ev) => {
+                const color = eventMarkerColor(ev, groupColor)
+                return (
+                  <li key={ev.id}>
+                    <Link
+                      to={`/agenda/${ev.id}`}
+                      className="flex items-baseline justify-between gap-3 rounded-xl border border-mist/10 bg-ink/30 px-3 py-3 transition hover:border-citrus/40"
+                    >
+                      <div className="min-w-0 flex items-center gap-2">
+                        <span
+                          className="h-2.5 w-2.5 shrink-0 rounded-full"
+                          style={{ backgroundColor: color }}
+                          title={ev.scope === 'group' ? 'Grupo' : 'Individual'}
+                          aria-hidden
+                        />
+                        <div className="min-w-0">
+                          <p className="truncate font-medium text-foam">{ev.title}</p>
+                          {ev.location_name && (
+                            <p className="truncate text-xs text-mist/50">{ev.location_name}</p>
+                          )}
+                        </div>
+                      </div>
+                      <span className="shrink-0 text-sm tabular-nums text-citrus">
+                        {formatTime(ev.start_at)}
+                      </span>
+                    </Link>
+                  </li>
+                )
+              })}
             </ul>
           )}
         </Panel>

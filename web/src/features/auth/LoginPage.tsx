@@ -34,6 +34,14 @@ export function LoginPage() {
   return (
     <div className="mx-auto flex min-h-dvh max-w-md flex-col justify-center px-4 py-10">
       <div className="rise-in mb-8 text-center">
+        <img
+          src="/logo.png"
+          alt=""
+          width={72}
+          height={72}
+          className="mx-auto mb-3 h-[72px] w-[72px]"
+          style={{ imageRendering: 'pixelated' }}
+        />
         <p className="text-xs uppercase tracking-[0.25em] text-sky/80">bem-vindo</p>
         <h1 className="font-display text-5xl font-bold text-foam">Balelagenda</h1>
         <p className="mt-2 text-mist/70">A agenda social do grupo — sem espalhar no WhatsApp.</p>

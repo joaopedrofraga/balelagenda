@@ -2,9 +2,11 @@ import { useMemo, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useAuth } from '../features/auth/AuthProvider'
 import {
+  canManageEvent,
   photoPublicUrl,
   useAddComment,
   useAttendees,
+  useDefaultGroup,
   useDeleteComment,
   useDeleteEventPhoto,
   useEvent,
@@ -16,7 +18,7 @@ import {
   useUpdateEvent,
   useUploadEventPhoto,
 } from '../lib/hooks'
-import type { AttendanceStatus, EventHistoryAction } from '../types/database'
+import type { AttendanceStatus, EventHistoryAction, EventScope } from '../types/database'
 import {
   Button,
   ErrorText,
@@ -54,6 +56,7 @@ export function EventDetailPage() {
   const { id } = useParams()
   const { profile } = useAuth()
   const { data: event, isLoading } = useEvent(id)
+  const { data: group } = useDefaultGroup()
   useEventRealtime(id)
   const { data: attendees } = useAttendees(id)
   const { data: comments } = useEventComments(id)
@@ -72,7 +75,13 @@ export function EventDetailPage() {
   const [commentText, setCommentText] = useState('')
   const [commentError, setCommentError] = useState<string | null>(null)
   const [photoError, setPhotoError] = useState<string | null>(null)
-  const [form, setForm] = useState({ title: '', description: '', location_name: '', start_at: '' })
+  const [form, setForm] = useState({
+    title: '',
+    description: '',
+    location_name: '',
+    start_at: '',
+    scope: 'individual' as EventScope,
+  })
 
   const counts = useMemo(() => {
     const c = { going: 0, maybe: 0, not_going: 0 }
@@ -83,6 +92,7 @@ export function EventDetailPage() {
   }, [attendees])
 
   const mine = attendees?.find((a) => a.user_id === profile?.id)
+  const canManage = event ? canManageEvent(event, profile) : false
 
   function startEdit() {
     if (!event) return
@@ -91,6 +101,7 @@ export function EventDetailPage() {
       description: event.description ?? '',
       location_name: event.location_name ?? '',
       start_at: event.start_at.slice(0, 16),
+      scope: event.scope ?? 'individual',
     })
     setEditing(true)
   }
@@ -106,6 +117,7 @@ export function EventDetailPage() {
         description: form.description || null,
         location_name: form.location_name || null,
         start_at: new Date(form.start_at).toISOString(),
+        scope: form.scope,
       })
       setEditing(false)
     } catch (err) {
@@ -166,40 +178,64 @@ export function EventDetailPage() {
         </p>
         {event.location_name && <p>Local: {event.location_name}</p>}
         {event.description && <p className="text-mist/70">{event.description}</p>}
+        <p className="text-xs text-mist/50">
+          Tipo: {event.scope === 'group' ? 'Evento de grupo' : 'Compromisso individual'}
+          {event.scope === 'group' && group?.calendar_color
+            ? ` · cor do grupo ${group.calendar_color}`
+            : event.profiles?.calendar_color
+              ? ` · cor ${event.profiles.calendar_color}`
+              : ''}
+        </p>
         {event.profiles && (
           <p className="flex items-center gap-2 text-xs text-mist/40">
             <UserAvatar name={event.profiles.name} avatarPath={event.profiles.avatar_path} size="xs" />
             Criado por {event.profiles.name}
           </p>
         )}
-        <div className="flex flex-wrap gap-2 pt-2">
-          <Button variant="ghost" type="button" onClick={startEdit}>
-            Editar
-          </Button>
-          {event.status !== 'cancelled' && (
-            <Button variant="danger" type="button" onClick={() => void setStatus('cancelled')}>
-              Cancelar
+        {canManage && (
+          <div className="flex flex-wrap gap-2 pt-2">
+            <Button variant="ghost" type="button" onClick={startEdit}>
+              Editar
             </Button>
-          )}
-          {event.status === 'cancelled' && (
-            <Button variant="ghost" type="button" onClick={() => void setStatus('planned')}>
-              Restaurar
-            </Button>
-          )}
-          {event.status !== 'completed' && event.status !== 'cancelled' && (
-            <Button type="button" onClick={() => void setStatus('completed')}>
-              Virar memória
-            </Button>
-          )}
-        </div>
+            {event.status !== 'cancelled' && (
+              <Button variant="danger" type="button" onClick={() => void setStatus('cancelled')}>
+                Cancelar
+              </Button>
+            )}
+            {event.status === 'cancelled' && (
+              <Button variant="ghost" type="button" onClick={() => void setStatus('planned')}>
+                Restaurar
+              </Button>
+            )}
+            {event.status !== 'completed' && event.status !== 'cancelled' && (
+              <Button type="button" onClick={() => void setStatus('completed')}>
+                Virar memória
+              </Button>
+            )}
+          </div>
+        )}
         {error && <ErrorText>{error}</ErrorText>}
       </Panel>
 
-      {editing && (
+      {editing && canManage && (
         <Panel>
           <form className="space-y-3" onSubmit={saveEdit}>
             <Field label="Título">
-              <Input value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} required />
+              <Input
+                value={form.title}
+                onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
+                required
+              />
+            </Field>
+            <Field label="Tipo">
+              <select
+                className="w-full rounded-xl border border-mist/15 bg-panel px-3 py-2.5 text-foam"
+                value={form.scope}
+                onChange={(e) => setForm((f) => ({ ...f, scope: e.target.value as EventScope }))}
+              >
+                <option value="individual">Compromisso individual</option>
+                <option value="group">Evento de grupo</option>
+              </select>
             </Field>
             <Field label="Data">
               <Input
@@ -293,7 +329,7 @@ export function EventDetailPage() {
                   className="aspect-square w-full object-cover"
                   loading="lazy"
                 />
-                {(photo.uploaded_by === profile?.id) && (
+                {photo.uploaded_by === profile?.id && (
                   <button
                     type="button"
                     className="absolute right-2 top-2 rounded-lg bg-ink/80 px-2 py-1 text-xs text-coral opacity-0 transition group-hover:opacity-100"

@@ -182,11 +182,23 @@ export function AppLayout() {
   return (
     <div className="mx-auto flex min-h-dvh max-w-5xl flex-col px-4 pb-24 pt-6 md:pb-8">
       <header className="rise-in relative z-40 mb-6 flex items-end justify-between gap-4 md:mb-8">
-        <div>
-          <p className="text-xs uppercase tracking-[0.2em] text-sky/80">agenda do rolê</p>
-          <Link to="/" className="font-display text-4xl font-bold text-foam md:text-5xl">
-            Balelagenda
+        <div className="flex items-end gap-3">
+          <Link to="/" className="shrink-0" aria-label="Balelagenda — início">
+            <img
+              src="/logo.png"
+              alt=""
+              width={48}
+              height={48}
+              className="h-12 w-12 image-rendering-pixelated"
+              style={{ imageRendering: 'pixelated' }}
+            />
           </Link>
+          <div>
+            <p className="text-xs uppercase tracking-[0.2em] text-sky/80">agenda do rolê</p>
+            <Link to="/" className="font-display text-4xl font-bold text-foam md:text-5xl">
+              Balelagenda
+            </Link>
+          </div>
         </div>
         <div className="flex items-center gap-2">
           <NotificationBell />

@@ -9,7 +9,15 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.svg', 'pwa-192.png', 'pwa-512.png'],
+      includeAssets: [
+        'favicon.ico',
+        'favicon-32.png',
+        'apple-touch-icon.png',
+        'icon.png',
+        'logo.png',
+        'pwa-192.png',
+        'pwa-512.png',
+      ],
       manifest: {
         name: 'Balelagenda',
         short_name: 'Balelagenda',

@@ -1,6 +1,7 @@
 export type UserRole = 'admin' | 'user'
 export type GroupRole = 'owner' | 'admin' | 'member'
 export type EventStatus = 'planned' | 'confirmed' | 'cancelled' | 'completed'
+export type EventScope = 'individual' | 'group'
 export type AttendanceStatus = 'going' | 'maybe' | 'not_going'
 export type EventHistoryAction = 'created' | 'edited' | 'cancelled' | 'restored' | 'completed'
 
@@ -12,6 +13,7 @@ export type Profile = {
   role: UserRole
   active: boolean
   avatar_path: string | null
+  calendar_color: string
   created_at: string
   updated_at: string
   last_login_at: string | null
@@ -19,13 +21,14 @@ export type Profile = {
 /** password_hash exists only no servidor — nunca tipar/selecionar no client. */
 
 /** Nested profile fields commonly selected with related rows */
-export type ProfileRef = Pick<Profile, 'id' | 'name' | 'username' | 'avatar_path'>
+export type ProfileRef = Pick<Profile, 'id' | 'name' | 'username' | 'avatar_path' | 'calendar_color'>
 
 export type Group = {
   id: string
   name: string
   description: string | null
   created_by: string | null
+  calendar_color: string
   created_at: string
   updated_at: string
 }
@@ -52,6 +55,7 @@ export type EventRow = {
   notes: string | null
   max_participants: number | null
   status: EventStatus
+  scope: EventScope
   created_by: string
   created_at: string
   updated_at: string

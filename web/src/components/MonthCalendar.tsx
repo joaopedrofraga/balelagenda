@@ -2,10 +2,16 @@ import { addMonths, mondayIndex, startOfMonth, toDateKey } from '../lib/dateUtil
 
 const WEEKDAYS = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'] as const
 
+export type DayMarker = {
+  colors: string[]
+  count: number
+}
+
 type Props = {
   month: Date
   selectedKey: string
-  eventCounts: Map<string, number>
+  /** Por dateKey: até 3 cores distintas dos eventos do dia */
+  dayMarkers: Map<string, DayMarker>
   onMonthChange: (month: Date) => void
   onSelectDay: (dateKey: string) => void
 }
@@ -13,7 +19,7 @@ type Props = {
 export function MonthCalendar({
   month,
   selectedKey,
-  eventCounts,
+  dayMarkers,
   onMonthChange,
   onSelectDay,
 }: Props) {
@@ -68,7 +74,9 @@ export function MonthCalendar({
             return <div key={`empty-${i}`} className="aspect-square" />
           }
 
-          const count = eventCounts.get(cell.key) ?? 0
+          const marker = dayMarkers.get(cell.key)
+          const count = marker?.count ?? 0
+          const colors = marker?.colors ?? []
           const isSelected = cell.key === selectedKey
           const isToday = cell.key === todayKey
 
@@ -90,19 +98,16 @@ export function MonthCalendar({
             >
               <span>{cell.day}</span>
               {count > 0 && (
-                <span
-                  className={['mt-0.5 flex gap-0.5', isSelected ? 'text-ink/70' : 'text-citrus'].join(
-                    ' ',
-                  )}
-                  aria-hidden
-                >
+                <span className="mt-0.5 flex gap-0.5" aria-hidden>
                   {Array.from({ length: Math.min(count, 3) }).map((_, dot) => (
                     <span
                       key={dot}
-                      className={[
-                        'h-1 w-1 rounded-full',
-                        isSelected ? 'bg-ink/55' : 'bg-citrus',
-                      ].join(' ')}
+                      className="h-1.5 w-1.5 rounded-full"
+                      style={{
+                        backgroundColor: isSelected
+                          ? 'rgba(11, 31, 36, 0.55)'
+                          : colors[dot] ?? colors[0] ?? '#c8f542',
+                      }}
                     />
                   ))}
                 </span>

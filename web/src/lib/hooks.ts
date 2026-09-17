@@ -22,10 +22,31 @@ const EVENT_PHOTOS_BUCKET = 'event-photos'
 const AVATARS_BUCKET = 'avatars'
 const AVATAR_MAX_BYTES = 5 * 1024 * 1024
 /** Nested profile columns used across event/comment/member joins — never password_hash */
-export const PROFILE_REF = 'id,name,username,avatar_path'
+export const PROFILE_REF = 'id,name,username,avatar_path,calendar_color'
 /** Full public profile columns (excludes password_hash) */
 export const PROFILE_PUBLIC =
-  'id, name, username, email, role, active, avatar_path, created_at, updated_at, last_login_at'
+  'id, name, username, email, role, active, avatar_path, calendar_color, created_at, updated_at, last_login_at'
+
+export const DEFAULT_PROFILE_COLOR = '#7dd3fc'
+export const DEFAULT_GROUP_COLOR = '#c8f542'
+
+export function canManageEvent(
+  event: Pick<EventRow, 'created_by'>,
+  profile: Pick<Profile, 'id' | 'role'> | null | undefined,
+): boolean {
+  if (!profile) return false
+  return event.created_by === profile.id || profile.role === 'admin'
+}
+
+export function eventMarkerColor(
+  event: Pick<EventRow, 'scope'> & { profiles?: Pick<Profile, 'calendar_color'> | null },
+  groupColor?: string | null,
+): string {
+  if (event.scope === 'group') {
+    return groupColor || DEFAULT_GROUP_COLOR
+  }
+  return event.profiles?.calendar_color || DEFAULT_PROFILE_COLOR
+}
 
 export function photoPublicUrl(storagePath: string) {
   const { data } = supabase.storage.from(EVENT_PHOTOS_BUCKET).getPublicUrl(storagePath)
@@ -41,9 +62,65 @@ export function useDefaultGroupId() {
   return useQuery({
     queryKey: ['default-group'],
     queryFn: async () => {
-      const { data, error } = await supabase.from('groups').select('id').order('created_at').limit(1).maybeSingle()
+      const { data, error } = await supabase
+        .from('groups')
+        .select('id, calendar_color')
+        .order('created_at')
+        .limit(1)
+        .maybeSingle()
       if (error) throw error
       return data?.id ?? null
+    },
+  })
+}
+
+export function useDefaultGroup() {
+  return useQuery({
+    queryKey: ['default-group-full'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('groups')
+        .select('id, name, description, created_by, calendar_color, created_at, updated_at')
+        .order('created_at')
+        .limit(1)
+        .maybeSingle()
+      if (error) throw error
+      return data
+    },
+  })
+}
+
+export function useUpdateGroup() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (payload: { id: string; name?: string; description?: string | null; calendar_color?: string }) => {
+      const { id, ...patch } = payload
+      const { data, error } = await supabase.from('groups').update(patch).eq('id', id).select().single()
+      if (error) throw error
+      return data
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['default-group'] })
+      void qc.invalidateQueries({ queryKey: ['default-group-full'] })
+      void qc.invalidateQueries({ queryKey: ['events'] })
+    },
+  })
+}
+
+export function useUpdateMyProfile() {
+  const qc = useQueryClient()
+  const { profile, refreshProfile } = useAuth()
+  return useMutation({
+    mutationFn: async (patch: { calendar_color?: string; name?: string }) => {
+      if (!profile) throw new Error('Não autenticado')
+      const { error } = await supabase.from('profiles').update(patch).eq('id', profile.id)
+      if (error) throw error
+    },
+    onSuccess: async () => {
+      await refreshProfile()
+      void qc.invalidateQueries({ queryKey: ['group-members'] })
+      void qc.invalidateQueries({ queryKey: ['events'] })
+      void qc.invalidateQueries({ queryKey: ['event'] })
     },
   })
 }
@@ -93,11 +170,17 @@ export function useCreateEvent() {
       location_name?: string
       category?: string
       notes?: string
+      scope?: 'individual' | 'group'
     }) => {
       if (!profile) throw new Error('Não autenticado')
       const { data, error } = await supabase
         .from('events')
-        .insert({ ...payload, created_by: profile.id, status: 'planned' })
+        .insert({
+          ...payload,
+          scope: payload.scope ?? 'individual',
+          created_by: profile.id,
+          status: 'planned',
+        })
         .select()
         .single()
       if (error) throw error

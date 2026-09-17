@@ -92,7 +92,7 @@ Opcional (só se for usar sugestões IA/Places): chave OpenAI-compatible + Geoap
 
 ---
 
-## 4. Aplicar migrations `001→007` + seed
+## 4. Aplicar migrations `001→008` + seed
 
 No **SQL Editor** do Dashboard (recomendado no primeiro setup), execute **um arquivo por vez**, na ordem:
 
@@ -105,7 +105,8 @@ No **SQL Editor** do Dashboard (recomendado no primeiro setup), execute **um arq
 | 5 | `supabase/migrations/20260916000005_mvp3_ai_places_filters.sql` | Filtros / places |
 | 6 | `supabase/migrations/20260916000006_mvp4_expenses_notifications_stats.sql` | Despesas, notificações, stats + **Realtime publication** |
 | 7 | `supabase/migrations/20260916000007_profile_avatars.sql` | `avatar_path` + bucket **`avatars`** |
-| 8 | `supabase/seed.sql` | Grupo **Balela** + admin seed |
+| 8 | `supabase/migrations/20260916000008_event_perms_calendar_colors.sql` | Permissão edit/delete evento (criador/admin); `calendar_color` em profiles/groups; `events.scope` |
+| 9 | `supabase/seed.sql` | Grupo **Balela** + admin seed |
 
 Alternativa CLI (projeto linkado): `supabase db push` e depois cole/execute o `seed.sql` (o seed não vai automaticamente em todos os fluxos de push — confirme).
 

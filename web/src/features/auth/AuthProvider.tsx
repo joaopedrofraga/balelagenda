@@ -14,7 +14,7 @@ import { getStoredSession, type StoredSession } from './sessionStorage'
 
 /** Colunas públicas de profiles — nunca incluir password_hash. */
 export const PROFILE_COLUMNS =
-  'id, name, username, email, role, active, avatar_path, created_at, updated_at, last_login_at'
+  'id, name, username, email, role, active, avatar_path, calendar_color, created_at, updated_at, last_login_at'
 
 const SESSION_NOT_ACCEPTED_MSG =
   'Login ok, mas a API não autenticou a sessão. Confira se o secret JWT_SECRET das Edge Functions é idêntico ao JWT Secret do projeto (Supabase → Settings → API).'
